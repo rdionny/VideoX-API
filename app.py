@@ -101,15 +101,16 @@ def duration_seconds(iso):
 
 
 def parse_views_html(html):
-    m = re.search(r'id="v-views".*?<strong class="mobile-hide">([\d.,]+)</strong>', html, re.S)
+    m = re.search(r'id="v-views".*?<strong class="mobile-hide">([\d.,]+)([KkMm])?</strong>', html, re.S)
     if not m:
         return None
     t = m.group(1).strip()
+    suf = (m.group(2) or "").lower()
     mult = 1
-    if t.lower().endswith("k"):
-        mult, t = 1000, t[:-1]
-    elif t.lower().endswith("m"):
-        mult, t = 1_000_000, t[:-1]
+    if suf == "k":
+        mult = 1000
+    elif suf == "m":
+        mult = 1_000_000
     # o site usa "," como separador de milhar (ex.: 23,673) ou decimal (ex.: 23,5)
     if re.fullmatch(r"\d{1,3}(?:\.\d+)?(?:,\d{3})+", t):
         t = t.replace(",", "").replace(".", "")
