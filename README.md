@@ -1,4 +1,4 @@
-# API X — dados de vídeo para app Android
+# VideoX API — dados de vídeo para app Android
 
 API REST em **Flask** que busca dados de vídeos do XVideos em tempo real e devolve **JSON pronto** para consumo no seu app Android. Feita para o caso de uso: grade de vídeos + tela de detalhes + player (HLS adaptativo ou MP4).
 
