@@ -519,4 +519,6 @@ def categories():
 
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=3778, threaded=True)
+    # em hospedagem (ex.: Render) a porta e informada via variavel PORT;
+    # localmente continua na 3778
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", "3778")), threaded=True)
