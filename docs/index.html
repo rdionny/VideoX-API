@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>API X — Dados de vídeo para seu app Android</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+
+<div class="topbar">
+  <div class="wrap">
+    <a class="brand" href="/">API<span class="dot">•</span>X</a>
+    <span class="pill" id="status">verificando…</span>
+    <div class="spacer"></div>
+    <a class="btn ghost" href="/docs" style="padding:9px 16px;font-size:14px">📖 Documentação</a>
+  </div>
+</div>
+
+<div class="wrap">
+  <div class="hero">
+    <h1>Seu app Android, ligado<br>direto nos dados do <em>site</em>.</h1>
+    <p class="sub">A API X é uma API REST simples, feita em Flask: você pede uma busca, categoria ou tag — e ela devolve JSON pronto com <strong>título</strong>, <strong>capa</strong>, <strong>página do vídeo</strong> e até o <strong>link do MP4</strong> para tocar.</p>
+    <div class="tagrow">
+      <span class="chip">Flask · porta 3778</span>
+      <span class="chip">sem chave</span>
+      <span class="chip">sem login</span>
+      <span class="chip">CORS aberto</span>
+      <span class="chip">scraping em tempo real</span>
+      <span class="chip">conteúdo 18+</span>
+    </div>
+
+    <div class="basecard">
+      <div>
+        <div class="lbl">Base URL deste servidor</div>
+        <code id="baseUrl">carregando…</code>
+      </div>
+      <button class="copy" data-copy="#baseUrl">copiar</button>
+    </div>
+    <p class="hint">Se você abriu por IP local (algo como <code class="inl">http://192.168.x.x:3778</code>), use exatamente esse endereço no app. Se abriu pelo túnel, use o endereço do túnel.</p>
+
+    <div style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:52px">
+      <a class="btn" href="/docs">📖 Ver documentação completa</a>
+      <a class="btn ghost" href="/info" target="_blank">Ver metadados JSON</a>
+      <a class="btn ghost" href="/videos?source=home&count=5" target="_blank">Ver lista de exemplo</a>
+    </div>
+
+    <ol class="steps">
+      <li><b>Confira se a API está viva:</b> abra <code class="inl">/info</code> no navegador. Deve aparecer um JSON com o mapa dos endpoints.</li>
+      <li><b>Pegue uma lista de vídeos</b> (troque o termo pela sua busca):
+        <pre>curl "BASE/videos?source=search&amp;q=maga&amp;count=5"</pre></li>
+      <li><b>Pegue os detalhes de um vídeo</b> usando o <code class="inl">slug</code> que veio na lista:
+        <pre>curl "BASE/video/olimpkf8bba"</pre>
+        <span style="color:var(--dim);font-size:13.5px">A resposta inclui visualizações, capa grande e o MP4 pronto para tocar no player.</span>
+      </li>
+    </ol>
+  </div>
+</div>
+
+<div class="wrap">
+  <h2 style="font-size:24px;letter-spacing:-.3px">Endpoints</h2>
+  <div class="grid">
+    <div class="card">
+      <span class="m get">GET</span> <code class="path">/videos</code>
+      <h3>Listas de vídeos</h3>
+      <p>Home, busca, categoria, tag ou canal. Devolve título, capa e página de cada vídeo, com paginação.</p>
+      <p><a href="/docs#videos">ver detalhes →</a></p>
+    </div>
+    <div class="card">
+      <span class="m get">GET</span> <code class="path">/video/&lt;slug&gt;</code>
+      <h3>Detalhes do vídeo</h3>
+      <p>Título, visualizações, duração, data, uploader, tags, modelos e o <strong>link do MP4</strong> para reprodução.</p>
+      <p><a href="/docs#video-detalhe">ver detalhes →</a></p>
+    </div>
+    <div class="card">
+      <span class="m get">GET</span> <code class="path">/categories</code>
+      <h3>Categorias</h3>
+      <p>Todas as categorias disponíveis no site, prontas para usar no parâmetro <code class="inl">q</code> de listas.</p>
+      <p><a href="/docs#categorias">ver detalhes →</a></p>
+    </div>
+    <div class="card">
+      <span class="m get">GET</span> <code class="path">/info</code>
+      <h3>Metadados da API</h3>
+      <p>Versão, porta e o mapa das rotas. Bom teste rápido para saber se tudo está no ar.</p>
+      <p><a href="/docs#info-api">ver detalhes →</a></p>
+    </div>
+  </div>
+
+  <div class="grid" style="margin-top:26px">
+    <div class="card"><h3>⚡ 5 fontes de dados</h3><p>Uma única rota para home, busca, categoria, tag e canal — só muda o parâmetro <code class="inl">source</code>.</p></div>
+    <div class="card"><h3>🖼 Capas prontas</h3><p>Imagem grande para a tela de detalhes e thumbnail pequena para as grades, poupando dados do celular.</p></div>
+    <div class="card"><h3>▶️ HLS adaptativo + MP4</h3><p>O campo <code class="inl">hls</code> traz o M3U8 com todas as qualidades — o player troca de 240p a 1080p sozinho conforme a internet. MP4 direto segue disponível como fallback no ExoPlayer/Media3.</p></div>
+    <div class="card"><h3>🛡 Tolerante a falhas</h3><p>Cache de 60 s e nova tentativa automática quando o site responde uma página leve/anti-spam.</p></div>
+  </div>
+
+  <div class="callout warn" style="margin-top:26px">
+    <strong>Atenção:</strong> os links de reprodução (MP4 e o M3U8) carregam um código de segurança com <strong>validade de ~1 dia</strong>. O jeito certo de usar é pedir os detalhes do vídeo <em>neste momento</em> e tocar em seguida — não guarde o link por dias. O conteúdo do site é para maiores de 18 anos.
+  </div>
+</div>
+
+<footer>
+  <div class="wrap">
+    API X · v1.1 · Flask em porta 3778 · feita para uso no seu app Android · <a href="/docs">documentação</a>
+  </div>
+</footer>
+
+<script>
+(function(){
+  var b=document.getElementById('baseUrl');
+  if(b){b.textContent=location.origin+'/';}
+  document.querySelectorAll('.copy').forEach(function(btn){
+    btn.addEventListener('click',function(){
+      var t=btn.getAttribute('data-copy');
+      var el=t?document.querySelector(t):null;
+      var txt=el?el.textContent:'';
+      if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(txt);}
+      var old=btn.textContent;btn.textContent='copiado ✓';
+      setTimeout(function(){btn.textContent=old;},1500);
+    });
+  });
+  function ping(){
+    var el=document.getElementById('status');
+    fetch('info',{cache:'no-store'}).then(function(r){
+      el.textContent=r.ok?'online':'erro http';
+      el.className='pill '+(r.ok?'on':'off');
+    }).catch(function(){
+      el.textContent='offline';el.className='pill off';
+    });
+  }
+  ping();setInterval(ping,30000);
+})();
+</script>
+</body>
+</html>

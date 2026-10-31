@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Documentacao - API X</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+
+<div class="topbar">
+  <div class="wrap">
+    <a class="brand" href="/">API<span class="dot">&bull;</span>X</a>
+    <span class="pill" id="status">verificando&#8230;</span>
+    <div class="spacer"></div>
+    <a class="btn ghost" href="/" style="padding:9px 16px;font-size:14px">&#8592; Home</a>
+  </div>
+</div>
+
+<div class="docs-layout">
+  <nav class="toc">
+    <a href="#apresentacao">Apresentacao</a>
+    <a href="#comecar">Comecando</a>
+    <a href="#base-url">Base URL e status</a>
+    <a href="#videos">GET /videos (listas)</a>
+    <a href="#video-detalhe">GET /video/&lt;slug&gt; (detalhes)</a>
+    <a href="#categorias">GET /categories</a>
+    <a href="#info-api">GET /info</a>
+    <a href="#erros">Erros e status HTTP</a>
+    <a href="#limitacoes">Limitacoes e avisos</a>
+    <a href="#android">Guia Android</a>
+  </nav>
+
+  <div class="content">
+
+  <section id="apresentacao">
+    <h2>Apresentacao</h2>
+    <p>A <strong>API X</strong> e uma API REST construida em Flask que busca dados do XVideos em tempo real e devolve <strong>JSON pronto para o seu app Android</strong>. Ela foi feita especificamente para esse caso de uso:</p>
+    <ul>
+      <li><strong>Grade/lista de videos</strong> &mdash; titulo, capa, duracao, canal e link da pagina do video.</li>
+      <li><strong>Tela de detalhes</strong> &mdash; visualizacoes, descricao, data, modelo(s), tags e o <strong>link do MP4 para reproducao</strong>.</li>
+      <li><strong>Categorias</strong> &mdash; lista das categorias do site para montar abas/filtros no app.</li>
+    </ul>
+    <p>Como funciona por baixo: cada requisicao sua faz a API abrir a pagina correspondente no site, extrair os dados e devolver um JSON limpo. Ou seja, o conteudo e <strong>sempre atual</strong>, mas depende da internet e do site estar no ar (por isso existem regras de cache e falhas &mdash; veja <a href="#limitacoes">Limitacoes</a>).</p>
+    <div class="callout warn"><strong>Conteudo adulto:</strong> os dados retornados sao majoritariamente <strong>18+</strong>. No app, aplique a trava de idade que fizer sentido para voce.</div>
+    <h3>O que voce nao precisa se preocupar</h3>
+    <ul>
+      <li><strong>Sem chave de API.</strong> Nao existe cadastro, token ou rate limit proprio.</li>
+      <li><strong>CORS aberto.</strong> Qualquer origem pode chamar &mdash; serve ate para prototipos web.</li>
+      <li><strong>Tudo via GET.</strong> Nao ha POST, autenticacao nem estado entre chamadas. Cada request e independente.</li>
+    </ul>
+  </section>
+
+  <section id="comecar">
+    <h2>Comecando passo a passo</h2>
+    <ol class="steps">
+      <li><b>Confirme que a API esta viva.</b> Abra <code class="inl">/info</code> no navegador ou mande um GET. Deve voltar um JSON com o mapa de endpoints e o codigo HTTP 200. Se aparecer erro de conexao, o servidor esta fora do ar.</li>
+      <li><b>Pegue uma lista basica.</b> Chame <code class="inl">/videos?source=home&amp;count=5</code>. Voltam 5 itens com <code class="inl">slug</code>, <code class="inl">titulo</code>, <code class="inl">capa_thumb</code> e <code class="inl">url_pagina</code>. E o suficiente para montar uma grade na tela inicial.</li>
+      <li><b>Monte a grade com o thumbnail pequeno.</b> Use <code class="inl">capa_thumb</code> (imagem pequena) nos cards. Use <code class="inl">capa</code> (grande) so quando abrir o detalhe. Isso economiza bastante dados moveis.</li>
+      <li><b>Ao tocar num card, peca os detalhes.</b> Chame <code class="inl">/video/&lt;slug&gt;</code> com o slug que veio na lista. Volta a tela de detalhes com <code class="inl">visualizacoes</code>, <code class="inl">descricao</code> e o mapa <code class="inl">reproducao</code>.</li>
+      <li><b>Toque o video.</b> Prefira o campo <code class="inl">hls</code> (stream M3U8 adaptativo): ele so e uma URL, e o player escolhe a qualidade sozinho conforme a internet. Se ele vier nulo, caia para o mapa <code class="inl">reproducao</code> (MP4). <strong>Pede detalhes na hora de tocar</strong> &mdash; os links expiram em ~1 dia.</li>
+    </ol>
+    <p>Fluxo simplificado do app:</p>
+<pre>tela inicial  --GET /videos?source=home--&gt;  grade de cards
+     (card usa: titulo, capa_thumb, duranca_texto, canal)
+  [ toque no card ]
+tela de detalhes  --GET /video/&lt;slug&gt;--&gt;  informacoes + reproducao
+     (player usa: hls  [ou reproducao["sd"] como fallback])
+  [ tocar play ]
+player (ExoPlayer / Media3)</pre>
+  </section>
+
+  <section id="base-url">
+    <h2>Base URL e verificacao de status</h2>
+    <p>A base depende de <strong>como voce esta acessando o servidor</strong>:</p>
+    <div class="tbl"><table>
+      <tr><th>Cenario</th><th>Base URL</th></tr>
+      <tr><td>No mesmo aparelho que roda a API</td><td><code class="ty">http://localhost:3778</code></td></tr>
+      <tr><td>Celular na mesma rede Wi-Fi</td><td><code class="ty">http://&lt;IP-do-PC&gt;:3778</code> &nbsp;(ex.: <code class="ty">http://192.168.0.10:3778</code>)</td></tr>
+      <tr><td>Pelo tunel (teste externo, sem IP fixo)</td><td><code class="ty">https://&lt;nome-aleatorio&gt;.trycloudflare.com</code></td></tr>
+    </table></div>
+    <p>Para checar se esta no ar a qualquer momento, um ping leve no <code class="inl">/info</code>:</p>
+<pre>GET /info
+HTTP/1.1 200 OK
+Content-Type: application/json</pre>
+    <div class="callout ok">No app, um ping simples ao <code class="inl">/info</code> a cada poucos minutos resolve para exibir um indicador de “online / offline” na tela inicial.</div>
+  </section>
+
+  <section id="videos">
+    <h2><span class="m get">GET</span>&nbsp;/videos &mdash; listas de videos</h2>
+    <p>E o endpoint principal para grades, buscas e abas. Retorna um conjunto de videos com o minimo necessario para exibir um card na tela.</p>
+
+    <h3>Parametros (query string)</h3>
+    <div class="tbl"><table>
+      <tr><th>Parametro</th><th>Tipo</th><th>Padrao</th><th>O que faz</th></tr>
+      <tr><td><code class="ty">source</code> <span class="opt">opcional</span></td><td><code class="ty">string</code></td><td><code class="ty">home</code></td><td>Qual pagina buscar. Valores: <code class="ty">home</code>, <code class="ty">search</code>, <code class="ty">category</code>, <code class="ty">tag</code>, <code class="ty">user</code>.</td></tr>
+      <tr><td><code class="ty">q</code> <span class="req">obrigatorio*</span></td><td><code class="ty">string</code></td><td>&mdash;</td><td>Termo de busca, slug da categoria, nome da tag ou usuario. *Obrigatorio quando <code class="ty">source</code> e <code class="ty">search</code>, <code class="ty">category</code>, <code class="ty">tag</code> ou <code class="ty">user</code>; ignorado em <code class="ty">home</code>.</td></tr>
+      <tr><td><code class="ty">page</code> <span class="opt">opcional</span></td><td><code class="ty">int</code></td><td><code class="ty">1</code></td><td>Numero da pagina (comeca em 1). Ignorado em <code class="ty">home</code>.</td></tr>
+      <tr><td><code class="ty">count</code> <span class="opt">opcional</span></td><td><code class="ty">int</code></td><td>&mdash;</td><td>Limita quantos videos retornar (corta a lista). Util para pagina controlada no cliente.</td></tr>
+    </table></div>
+
+    <h3>Fontes e formatos de chamada</h3>
+    <div class="tbl"><table>
+      <tr><th>source</th><th>q esperado</th><th>Paginacao</th><th>Exemplo de chamada</th></tr>
+      <tr><td><code class="ty">home</code></td><td>nao usado</td><td>nao tem paginas</td><td><code class="ty">/videos?source=home&amp;count=10</code></td></tr>
+      <tr><td><code class="ty">search</code></td><td>texto livre (URL-encode)</td><td><code class="ty">page=1,2,3&hellip;</code></td><td><code class="ty">/videos?source=search&amp;q=maga&amp;page=2</code></td></tr>
+      <tr><td><code class="ty">category</code></td><td>slug da categoria (ex.: <code class="ty">Latina-16</code>)</td><td><code class="ty">page=1,2,3&hellip;</code></td><td><code class="ty">/videos?source=category&amp;q=Latina-16&amp;page=3</code></td></tr>
+      <tr><td><code class="ty">tag</code></td><td>nome da tag (ex.: <code class="ty">blowjob</code>)</td><td><code class="ty">page=1,2,3&hellip;</code></td><td><code class="ty">/videos?source=tag&amp;q=blowjob</code></td></tr>
+      <tr><td><code class="ty">user</code></td><td>nome de usuario</td><td>muito instavel</td><td><code class="ty">/videos?source=user&amp;q=tommycabrio</code></td></tr>
+    </table></div>
+    <div class="callout warn"><strong>source=user e best-effort.</strong> O site entrega a pagina do usuario via script, entao essa fonte as vezes volta lista vazia mesmo com usuario valido. Trate <code class="ty">videos: []</code> como resultado legitimo e mostre um estado vazio elegante no app.</div>
+
+    <h3>Estrutura da resposta</h3>
+    <p>Envelope comum de todas as listas:</p>
+    <div class="tbl"><table>
+      <tr><th>Campo</th><th>Tipo</th><th>Descricao</th></tr>
+      <tr><td><code class="ty">fonte</code></td><td><code class="ty">string</code></td><td>Fonte usada: <code class="ty">home</code>, <code class="ty">search</code>, <code class="ty">category</code>, <code class="ty">tag</code> ou <code class="ty">user</code>.</td></tr>
+      <tr><td><code class="ty">query</code></td><td><code class="ty">string|null</code></td><td>O valor de <code class="ty">q</code> ecoado (null quando source=home).</td></tr>
+      <tr><td><code class="ty">pagina</code></td><td><code class="ty">int</code></td><td>Numero da pagina retornada (sempre 1 em home).</td></tr>
+      <tr><td><code class="ty">total_na_pagina</code></td><td><code class="ty">int</code></td><td>Quantos videos vieram nesta resposta.</td></tr>
+      <tr><td><code class="ty">tem_mais_paginas</code></td><td><code class="ty">bool</code></td><td>Se existe proxima pagina. Falso em home sempre. E o campo correto para habilitar/desabilitar “carregar mais”.</td></tr>
+      <tr><td><code class="ty">videos</code></td><td><code class="ty">array</code></td><td>Lista de videos (veja abaixo).</td></tr>
+    </table></div>
+    <p>Cada item em <code class="ty">videos[]</code>:</p>
+    <div class="tbl"><table>
+      <tr><th>Campo</th><th>Tipo</th><th>Descricao</th></tr>
+      <tr><td><code class="ty">slug</code></td><td><code class="ty">string</code></td><td>Identificador curto do video (ex.: <code class="ty">olimpkf8bba</code>). E o que voce passa em <code class="ty">/video/&lt;slug&gt;</code>.</td></tr>
+      <tr><td><code class="ty">titulo</code></td><td><code class="ty">string</code></td><td>Titulo exibido no card.</td></tr>
+      <tr><td><code class="ty">capa</code></td><td><code class="ty">string</code></td><td>URL da imagem grande (use na tela de detalhes).</td></tr>
+      <tr><td><code class="ty">capa_thumb</code></td><td><code class="ty">string</code></td><td>URL da thumbnail pequena (use nas grades).</td></tr>
+      <tr><td><code class="ty">url_pagina</code></td><td><code class="ty">string</code></td><td>Link publico do video no site &mdash; bom para botao “ver original”.</td></tr>
+      <tr><td><code class="ty">duranca_texto</code></td><td><code class="ty">string</code></td><td>Duracao legivel, ex.: <code class="ty">"17 min"</code>.</td></tr>
+      <tr><td><code class="ty">qualidade</code></td><td><code class="ty">string</code></td><td>Melhor qualidade disponivel, ex.: <code class="ty">"1080p"</code>.</td></tr>
+      <tr><td><code class="ty">canal</code></td><td><code class="ty">string</code></td><td>Nome do canal/modelo principal (quando disponivel).</td></tr>
+    </table></div>
+
+    <h3>Exemplos reais (capturados da API)</h3>
+    <p><strong>Inicio &mdash; <code class="ty">/videos?source=home</code>:</strong></p>
+<pre>{
+  "fonte": "home",
+  "query": null,
+  "pagina": 1,
+  "tem_mais_paginas": false,
+  "total_na_pagina": 3,
+  "videos": [
+    {
+      "slug": "olimpkf8bba",
+      "titulo": "DOBLE PENETRATION! He milks us one by one...",
+      "canal": "Tommycabrio",
+      "capa": "https://thumb-cdn77.xvideos-cdn.com/c60226.../xv_5.jpg",
+      "capa_thumb": "https://thumb-cdn77.xvideos-cdn.com/c60226.../xv_5_t.jpg",
+      "url_pagina": "https://www.xvideos.com/video.olimpkf8bba/57995014/0/doble_penetration...",
+      "duranca_texto": "17 min",
+      "qualidade": "1440p"
+    }
+  ]
+}</pre>
+    <p><strong>Busca &mdash; <code class="ty">/videos?source=search&amp;q=maga</code>:</strong></p>
+<pre>{
+  "fonte": "search",
+  "query": "maga",
+  "pagina": 1,
+  "tem_mais_paginas": true,
+  "total_na_pagina": 2,
+  "videos": [
+    {
+      "slug": "imkbbcm0731",
+      "titulo": "Sexy Big Ass Magician Teen Stepsister Jade Jantzen...",
+      "canal": "Sis Loves Me",
+      "capa": "https://thumb-cdn77.xvideos-cdn.com/4114cd.../xv_6.jpg",
+      "capa_thumb": "https://thumb-cdn77.xvideos-cdn.com/4114cd.../xv_6_t.jpg",
+      "url_pagina": "https://www.xvideos.com/video.imkbbcm0731/x",
+      "duranca_texto": "8 min",
+      "qualidade": "1080p"
+    }
+  ]
+}</pre>
+    <p><strong>Categoria &mdash; <code class="ty">/videos?source=category&amp;q=Latina-16&amp;page=2</code>:</strong></p>
+<pre>{
+  "fonte": "category",
+  "query": "Latina-16",
+  "pagina": 2,
+  "tem_mais_paginas": true,
+  "total_na_pagina": 2,
+  "videos": [
+    {
+      "slug": "iflivad5f01",
+      "titulo": "PropertySex - Spanish tourist with big tits makes BNB host cum",
+      "canal": "PropertySex",
+      "capa": "https://thumb-cdn77.xvideos-cdn.com/3ac4d7.../xv_8.jpg",
+      "capa_thumb": "https://thumb-cdn77.xvideos-cdn.com/3ac4d7.../xv_8_t.jpg",
+      "url_pagina": "https://www.xvideos.com/video.iflivad5f01/x",
+      "duranca_texto": "12 min",
+      "qualidade": "1080p"
+    }
+  ]
+}</pre>
+    <div class="callout">Para descobrir quais slugs de categoria existem, chame <a href="#categorias">GET /categories</a> uma vez e cacheie no app.</div>
+  </section>
+
+  <section id="video-detalhe">
+    <h2><span class="m get">GET</span>&nbsp;/video/&lt;slug&gt; &mdash; tela de detalhes</h2>
+    <p>Busca todos os metadados de um video especifico, incluindo o <strong>link do MP4 para reproducao</strong>. Aceita tres formatos de entrada no caminho, todos equivalentes:</p>
+    <ul>
+      <li><code class="ty">/video/olimpkf8bba</code> &mdash; slug puro (recomendado)</li>
+      <li><code class="ty">/video/video.olimpkf8bba/x</code> &mdash; trecho curto da URL</li>
+      <li><code class="ty">/video/olimpkf8bba/doble_penetration_he_milks_us...</code> &mdash; nome grande completo</li>
+    </ul>
+    <p>O parser extrai o slug automaticamente dos tres casos, entao voce pode guardar o <code class="ty">url_pagina</code> inteiro que vier da lista e passar direto.</p>
+
+    <h3>Estrutura da resposta</h3>
+    <div class="tbl"><table>
+      <tr><th>Campo</th><th>Tipo</th><th>Descricao</th></tr>
+      <tr><td><code class="ty">slug</code></td><td><code class="ty">string</code></td><td>Slug curto do video.</td></tr>
+      <tr><td><code class="ty">id</code></td><td><code class="ty">int</code></td><td>ID numerico interno do video no site.</td></tr>
+      <tr><td><code class="ty">titulo</code></td><td><code class="ty">string</code></td><td>Titulo completo.</td></tr>
+      <tr><td><code class="ty">descricao</code></td><td><code class="ty">string|null</code></td><td>Descricao textual (pode ser vazia).</td></tr>
+      <tr><td><code class="ty">url_pagina</code></td><td><code class="ty">string</code></td><td>Link publico do video.</td></tr>
+      <tr><td><code class="ty">fonte</code></td><td><code class="ty">string</code></td><td>URL da pagina scrapeada.</td></tr>
+      <tr><td><code class="ty">capa</code></td><td><code class="ty">string</code></td><td>Imagem grande (poster da tela de detalhes).</td></tr>
+      <tr><td><code class="ty">capas</code></td><td><code class="ty">string[]</code></td><td>Thumbnails menores alternativas (pode ter 1 item ou mais).</td></tr>
+      <tr><td><code class="ty">duranca_seg</code></td><td><code class="ty">int</code></td><td>Duracao em segundos.</td></tr>
+      <tr><td><code class="ty">duranca_texto</code></td><td><code class="ty">string</code></td><td>Duracao em formato ISO 8601 (ex.: <code class="ty">PT00H17M28S</code>). Para exibir, use <code class="ty">duranca_seg</code> e formate localmente.</td></tr>
+      <tr><td><code class="ty">visualizacoes</code></td><td><code class="ty">int</code></td><td>Numero de visualizacoes exibido na pagina (usa o arredondamento que o site mostra).</td></tr>
+      <tr><td><code class="ty">data_publicacao</code></td><td><code class="ty">string|null</code></td><td>Data ISO 8601 da publicacao (ex.: <code class="ty">2026-10-29T14:25:21+00:00</code>).</td></tr>
+      <tr><td><code class="ty">qualidade</code></td><td><code class="ty">string</code></td><td>Melhor qualidade disponivel (ex.: <code class="ty">1440p</code>).</td></tr>
+      <tr><td><code class="ty">reproducao</code></td><td><code class="ty">map&lt;qualidade, url_mp4&gt;</code></td><td><strong>O mais importante.</strong> Mapa qualidade &rarr; URL do MP4 direto. As chaves variam (ex.: <code class="ty">sd</code>, <code class="ty">video_240p</code>, <code class="ty">video_360p</code>). Pegue a que preferir (geralmente a maior disponivel).</td></tr>
+      <tr><td><code class="ty">hls</code></td><td><code class="ty">string|null</code></td><td><strong>Master playlist M3U8</strong> (HLS adaptativo). Contem todas as qualidades disponiveis do video (vimos casos com 250p, 360p, 480p, 720p e 1080p) &mdash; o player troca de qualidade em tempo real conforme a conexao. <strong>Opcao recomendada</strong> para reproducao; expira em ~1 dia como o MP4.</td></tr>
+      <tr><td><code class="ty">uploader</code></td><td><code class="ty">obj</code></td><td>Quem postou: <code class="ty">{nome, usuario, url}</code>.</td></tr>
+      <tr><td><code class="ty">modelos</code></td><td><code class="ty">[{name,url}]</code></td><td>Modelos/apresentadores citados (pode ser vazio).</td></tr>
+      <tr><td><code class="ty">tags</code></td><td><code class="ty">string[]</code></td><td>Tags do video (util para chips clicaveis que ligam em <code class="ty">/videos?source=tag&amp;q=...</code>).</td></tr>
+      <tr><td><code class="ty">categorias</code></td><td><code class="ty">string[]</code></td><td>Categorias associadas &mdash; <em>frequentemente vazio</em>; use <code class="ty">/categories</code> para navegar por categoria.</td></tr>
+    </table></div>
+
+    <h3>Exemplo real (capturado da API, slug <code class="ty">olimpkf8bba</code>)</h3>
+<pre>{
+  "slug": "olimpkf8bba",
+  "id": 92436031,
+  "titulo": "DOBLE PENETRATION! He milks us one by one, while we play PlayStation!! FREE",
+  "descricao": "DOBLE PENETRATION! He milks us one by one, while we play PlayStation!! FREE",
+  "url_pagina": "https://www.xvideos.com/video.olimpkf8bba/doble_penetration_he_milks_us_one_by_one_while_we_play_playstation_free",
+  "capa": "https://thumb-cdn77.xvideos-cdn.com/c60226ac-.../xv_5.jpg",
+  "capas": [ "https://thumb-cdn77.xvideos-cdn.com/c60226ac-.../xv_5_t.jpg" ],
+  "duranca_seg": 1048,
+  "duranca_texto": "PT00H17M28S",
+  "visualizacoes": 280364,
+  "data_publicacao": "2026-10-29T14:25:21+00:00",
+  "qualidade": "1440p",
+  "reproducao": {
+    "sd": "https://mp4-cdn77.xvideos-cdn.com/c60226ac-.../mp4_sd.mp4?secure=3AEyAqAQ...,1793426623"
+  },
+  "hls": "https://hls-cdn77.xvideos-cdn.com/uunb4tFz...,1793427672/c60226ac-.../hls.m3u8",
+  "uploader": {
+    "nome": "Tommycabrio",
+    "usuario": "tommy_cabrio_official",
+    "url": "https://www.xvideos.com/tommy_cabrio_official"
+  },
+  "modelos": [
+    { "name": "Tommy Cabrio", "url": "https://www.xvideos.com/pornstars/tommycabrioxxx1" },
+    { "name": "Brady Bud",    "url": "https://www.xvideos.com/pornstars/brady_bud-model" }
+  ],
+  "tags": ["sexy","doggystyle","amateur","homemade","gostosa","big-cock"],
+  "categorias": []
+}</pre>
+
+    <div class="callout ok"><strong>HLS x MP4 &mdash; o que usar?</strong> O campo <code class="ty">hls</code> e a opcao recomendada para um player serio: e o mesmo formato que o proprio site usa, com todas as resolucoes em uma unica playlist. O <code class="ty">reproducao</code> (MP4) fica como fallback para players simples que nao falam HLS. Nos dois casos, a qualidade maxima do HLS costuma ser <em>melhor</em> que a do MP4 (MP4 quase sempre sai em 240p/360p; o HLS chega a 1080p).</div>
+    <div class="callout warn"><strong>O mapa <code class="ty">reproducao</code> muda de forma.</strong> Dependendo do video, voce pode receber uma so chave (<code class="ty">sd</code>) ou varias (<code class="ty">video_240p</code>, <code class="ty">video_360p</code>, ...). No app, percorra o mapa e escolha a melhor chave disponivel &mdash; nao faca hard-code de um nome especifico. A URL sempre termina em <code class="ty">?secure=&lt;codigo&gt;,&lt;timestamp&gt;</code> e <strong>expira em ~1 dia</strong> (veja <a href="#limitacoes">Limitacoes</a>).</div>
+  </section>
+
+  <section id="categorias">
+    <h2><span class="m get">GET</span>&nbsp;/categories &mdash; lista de categorias</h2>
+    <p>Retorna todas as categorias navegaveis do site. Use para preencher abas, chips ou um menu de categorias no app. Chame <strong>uma vez</strong> e cacheie localmente &mdash; a lista muda raramente.</p>
+
+    <h3>Estrutura da resposta</h3>
+<pre>{
+  "categorias": [
+    { "nome": "AI",      "slug": "c/AI-239",     "url": "https://www.xvideos.com/c/AI-239" },
+    { "nome": "Amateur", "slug": "c/Amateur-65", "url": "https://www.xvideos.com/c/Amateur-65" },
+    { "nome": "Anal",    "slug": "c/Anal-12",    "url": "https://www.xvideos.com/c/Anal-12" },
+    ...
+  ]
+}</pre>
+    <p>Atualmente retorna <strong>29 categorias</strong>. Para usar, extraia o valor apos <code class="ty">c/</code> do campo <code class="ty">slug</code> e passe como <code class="ty">q</code> em <code class="ty">/videos?source=category</code>:</p>
+<pre># dado slug = "c/Latina-16"
+GET /videos?source=category&amp;q=Latina-16&amp;page=1</pre>
+  </section>
+
+  <section id="info-api">
+    <h2><span class="m get">GET</span>&nbsp;/info &mdash; metadados da API</h2>
+    <p>Rota leve de health-check e descoberta. Util para verificar se o servidor esta vivo sem gastar tempo com scraping, e para o app saber as rotas disponiveis.</p>
+<pre>GET /info
+HTTP/1.1 200 OK
+Content-Type: application/json
+
+{
+  "api": "xvideos",
+  "versao": "1.0",
+  "port": 3778,
+  "endpoints": {
+    "lista_videos": "/videos?source=home|search|category|tag|user&amp;q=...&amp;page=N&amp;count=N",
+    "detalhes":     "/video/&lt;slug&gt;   (aceita slug puro ou url completa da pagina)",
+    "categorias":   "/categories"
+  }
+}</pre>
+  </section>
+
+  <section id="erros">
+    <h2>Erros e status HTTP</h2>
+    <p>Todos os erros vem como JSON com um campo <code class="ty">erro</code>. Trate esses codigos no app:</p>
+    <div class="tbl"><table>
+      <tr><th>Status</th><th>Corpo</th><th>Quando acontece</th><th>O que fazer no app</th></tr>
+      <tr><td><code class="ty">400</code></td><td><code class="ty">{"erro":"parametro page invalido"}</code> ou similar</td><td><code class="ty">q</code> faltando em search/category/tag/user; <code class="ty">page</code>/<code class="ty">count</code> nao numericos.</td><td>Bug na sua chamada &mdash; revise os parametros.</td></tr>
+      <tr><td><code class="ty">404</code></td><td><code class="ty">{"erro":"nao encontrado"}</code></td><td>Slug inexistente (video removido ou typo).</td><td>Mostre “video indisponivel” e volte a lista.</td></tr>
+      <tr><td><code class="ty">404</code></td><td><code class="ty">{"erro":"rota nao encontrada"}</code></td><td>Você chamou uma rota que nao existe (ex.: <code class="ty">/videoss</code>).</td><td>Verifique a URL.</td></tr>
+      <tr><td><code class="ty">502</code></td><td><code class="ty">{"erro":"falha ao buscar do xvideos (http NNN)"}</code></td><td>O site respondeu diferente do esperado (429, 5xx, anti-bot).</td><td>Tente de novo em alguns segundos; mostre estado de recarga.</td></tr>
+    </table></div>
+    <div class="callout ok"><strong>Dica de UX:</strong> em qualquer erro de rede/502, ofereca um botao “tentar de novo”. A API tem cache de 60 s por URL, entao repetir a mesma chamada logo em seguida costuma responder instantaneamente com os dados em cache.</div>
+  </section>
+
+  <section id="limitacoes">
+    <h2>Limitacoes e avisos importantes</h2>
+
+    <h3>O link MP4 expira em ~1 dia</h3>
+    <p>Cada URL de reproducao &mdash; seja o MP4 em <code class="ty">reproducao</code> ou o M3U8 no campo <code class="ty">hls</code> &mdash; carrega um codigo <code class="ty">?secure=&lt;codigo&gt;,&lt;timestamp&gt;</code> com validade. O timestamp marca a expiracao: apos ~24 h a URL para de funcionar (o player recebe erro). <strong>Regra pratica:</strong> chame <code class="ty">/video/&lt;slug&gt;</code> <em>no momento</em> em que o usuario toca o play e toque imediatamente em seguida.</p>
+
+    <h3>Cache de 60 segundos por URL</h3>
+    <p>Internamente a API cacheia cada pagina scrapeada por 60 s. Se voce chamar dois endpoints seguidos que aponte para a mesma pagina do site, o segundo responde na hora usando o cache. Nao altera o contrato JSON &mdash; so explica respostas extremamente rapidas logo apos outra.</p>
+
+    <h3>Retentativa automatica em pagina leve</h3>
+    <p>Quando o site devolve uma pagina “esqueleto” (anti-bot leve, challenge, etc.), a API repete a requisicao uma vez antes de desistir. Isso adiciona alguns segundos em algumas chamadas sem aviso &mdash; trate latencia maior como normal.</p>
+
+    <h3>O site muda de layout (A/B test)</h3>
+    <p>O XVideos testa layouts alternativos entre visitantes. O parser cobre as duas variacoes atuais, mas se o site fizer mudanca mais profunda, algum campo pode vir vazio temporariamente ate o parser ser atualizado. Os campos essenciais (<code class="ty">slug</code>, <code class="ty">titulo</code>, <code class="ty">capa</code>, <code class="ty">url_pagina</code>, <code class="ty">reproducao</code>) sao priorizados e raros de quebrar.</p>
+
+    <h3>Visualizacoes usam o numero exibido</h3>
+    <p>O campo <code class="ty">visualizacoes</code> reflete exatamente o numero que aparece na pagina do site (que ja vem arredondado por ele). Nao e o contador bruto interno.</p>
+
+    <h3>Paginacao em home nao existe</h3>
+    <p><code class="ty">source=home</code> retorna apenas a primeira tela do site. Se o app precisa de scroll infinito na aba inicial, use buscas populares ou categorias como continuacao &mdash; ou simplesmente limite a uma tela.</p>
+
+    <h3>source=user e instavel</h3>
+    <p>Paginas de usuario usam JavaScript/XHR no site; a extracao via HTML puro as vezes nao encontra itens. Considere tratar como fonte experimental.</p>
+  </section>
+
+  <section id="android">
+    <h2>Guia rapido para Android</h2>
+    <p>Tudo que o app precisa e <strong>OkHttp</strong> (ou Retrofit) + <strong>Glide/Coil</strong> para imagens + <strong>Media3 (ExoPlayer)</strong> para o video. Exemplo minimo em Kotlin:</p>
+
+    <h3>1 &middot; Cliente HTTP e Base URL</h3>
+<pre>val client = OkHttpClient.Builder()
+    .connectTimeout(30, TimeUnit.SECONDS)
+    .readTimeout(30, TimeUnit.SECONDS)
+    .build()
+
+val gson = Gson()
+val BASE = "https://seu-tunel.trycloudflare.com"   // troque pela sua Base URL</pre>
+
+    <h3>2 &middot; Buscar a home e montar a grade</h3>
+<pre>data class VideoItem(
+    val slug: String, val titulo: String,
+    val capa: String, val capa_thumb: String,
+    val url_pagina: String,
+    val duranca_texto: String, val qualidade: String, val canal: String
+)
+data class HomeData(val videos: List&lt;VideoItem&gt;)
+
+fun fetchHome(count: Int = 20): List&lt;VideoItem&gt; {
+    val url = (BASE + "/videos?source=home&amp;count=" + count)
+    val resp = client.newCall(url.toHttpUrlOrNull()!!).execute()
+    val body = resp.body!!.string()
+    return gson.fromJson(body, HomeData::class.java).videos
+}</pre>
+
+    <h3>3 &middot; Card na grade (Glide + RecyclerView)</h3>
+<pre>// Em cada ViewHolder do RecyclerView:
+holder.ivThumb.load(videoItem.capa_thumb)        // thumbnail pequena
+holder.tvTitle.text = videoItem.titulo
+holder.tvDuration.text = videoItem.duranca_texto
+holder.itemView.setOnClickListener { onVideoClick(videoItem.slug) }</pre>
+
+    <h3>4 &middot; Tela de detalhes + player Media3</h3>
+<pre>data class Uploader(val nome: String, val usuario: String, val url: String)
+data class DetailData(
+    val slug: String, val id: Long, val titulo: String,
+    val descricao: String?, val url_pagina: String, val capa: String,
+    val duranca_seg: Int, val visualizacoes: Int,
+    val data_publicacao: String?, val qualidade: String,
+    val reproducao: Map&lt;String, String&gt;, val hls: String?,
+    val uploader: Uploader,
+    val tags: List&lt;String&gt;, val categorias: List&lt;String&gt;
+)
+
+fun openDetail(slug: String) {
+    scope.launch(Dispatchers.IO) {
+        val url = BASE + "/video/" + slug
+        val body = client.newCall(url.toHttpUrlOrNull()!).execute().body!!.string()
+        val d = gson.fromJson(body, DetailData::class.java)
+        withContext(Dispatchers.Main) {
+            binding.tvTitle.text = d.titulo
+            binding.tvViews.text = d.visualizacoes.toString() + " views"
+            binding.tvDesc.text = d.descricao ?: ""
+            val player = ExoPlayer.Builder(context).build()
+            binding.playerView.player = player
+            // 1a opcao: HLS adaptativo - o player troca de qualidade sozinho
+            // conforme a rede (o m3u8 pode trazer 250p, 360p, 480p, 720p e 1080p):
+            if (d.hls != null) {
+                player.setMediaItem(MediaItem.fromUri(d.hls))  // Media3 detecta .m3u8
+                player.prepare(); player.play()
+            } else {
+                // fallback: primeiro MP4 disponivel no mapa
+                val mp4 = d.reproducao.values.firstOrNull()
+                if (mp4 != null) {
+                    player.setMediaItem(MediaItem.fromUri(mp4))
+                    player.prepare(); player.play()
+                }
+            }
+        }
+    }
+}</pre>
+
+    <h3>5 &middot; Busca livre</h3>
+<pre>fun fetchSearch(termo: String, page: Int = 1): List&lt;VideoItem&gt; {
+    val enc = Uri.encode(termo)
+    val url = (BASE + "/videos?source=search&amp;q=" + enc + "&amp;page=" + page)
+    val resp = client.newCall(url.toHttpUrlOrNull()!!).execute()
+    return gson.fromJson(resp.body!!.string(), HomeData::class.java).videos
+}</pre>
+
+    <h3>6 &middot; Categorias como abas</h3>
+<pre>data class Categoria(val nome: String, val slug: String, val url: String)
+data class CatsData(val categorias: List&lt;Categoria&gt;)
+
+fun loadCategories(): List&lt;Categoria&gt; {
+    val body = client.newCall((BASE + "/categories").toHttpUrlOrNull()!)
+        .execute().body!!.string()
+    return gson.fromJson(body, CatsData::class.java).categorias
+}
+// converter slug em q:
+fun catQ(c: Categoria) = c.slug.removePrefix("c/")   // "c/Latina-16" -&gt; "Latina-16"</pre>
+
+    <div class="callout ok"><strong>Checklist de integracao:</strong> (1) usar <code class="ty">capa_thumb</code> nas grades e <code class="ty">capa</code> nos detalhes; (2) buscar os detalhes <em>na hora de tocar</em> e usar o campo <code class="ty">hls</code> quando existir (fallback: mapa <code class="ty">reproducao</code>); (3) tratar 404 de <code class="ty">/video</code> com tela “indisponivel”; (4) cacheiar <code class="ty">/categories</code> localmente; (5) mostrar botao de recarregar em erro 502.</div>
+  </section>
+
+  </div><!-- .content -->
+</div><!-- .docs-layout -->
+
+<footer>
+  <div class="wrap">
+    API X &middot; Documentacao v1.1 &middot; exemplos reais capturados da API em 2026-10-31 &middot; <a href="/">&#8592; voltar para a home</a>
+  </div>
+</footer>
+
+<script>
+(function(){
+  function ping(){
+    var el=document.getElementById('status');
+    fetch('/info',{cache:'no-store'}).then(function(r){
+      el.textContent=r.ok?'online':'erro http';
+      el.className='pill '+(r.ok?'on':'off');
+    }).catch(function(){ el.textContent='offline';el.className='pill off'; });
+  }
+  ping();setInterval(ping,30000);
+})();
+</script>
+</body>
+</html>
